@@ -5,3 +5,9 @@ dist/
 .env
 *.local
 test/.test-gatelane/
+dist/*.tgz
+dist/gatelane*
+dist/sea.blob
+dist/bundle.cjs
+sea-config.json
+gatelane-demo.mp4

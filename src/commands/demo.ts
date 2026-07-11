@@ -16,7 +16,7 @@ export const demoCommand = new Command("demo")
     }
 
     console.log("╔══════════════════════════════════════════════════════╗");
-    console.log("║            GateLane v0.1.0 — Demo                   ║");
+    console.log("║            GateLane v0.2.0 — Demo                   ║");
     console.log("╚══════════════════════════════════════════════════════╝");
     console.log("");
     console.log(" GateLane controls agent tool calls through auth,");

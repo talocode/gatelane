@@ -1,5 +1,7 @@
 import { createRequire } from "node:module";
-const _require = createRequire(import.meta.url);
+const _require: ReturnType<typeof createRequire> = createRequire(
+  typeof import.meta !== "undefined" && import.meta.url ? import.meta.url : "/"
+);
 
 import type {
   GateLaneConfig,
