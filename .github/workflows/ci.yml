@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: [18, 20, 22, 24]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm install
+      - run: npm run build
+      - run: npm test
+        env:
+          GATELANE_HOME: ${{ runner.temp }}/.gatelane-test
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install
+      - run: npx tsc --noEmit

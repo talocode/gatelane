@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { initCommand } from "./commands/init.js";
 import { doctorCommand } from "./commands/doctor.js";
 import { demoCommand } from "./commands/demo.js";
@@ -15,13 +14,17 @@ import { serveCommand } from "./commands/serve.js";
 import { proxyCommand } from "./commands/proxy.js";
 import { mcpCommand } from "./commands/mcp.js";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+let _dirname: string;
+try {
+  _dirname = import.meta.dirname;
+} catch {
+  _dirname = __dirname;
+}
 
 function getVersion(): string {
   try {
     const pkg = JSON.parse(
-      readFileSync(join(__dirname, "..", "..", "package.json"), "utf-8"),
+      readFileSync(join(_dirname, "..", "..", "package.json"), "utf-8"),
     );
     return pkg.version || "0.1.0";
   } catch {

@@ -1,35 +1,44 @@
 import { loadServers } from "./config-store.js";
+import { ToolProxy } from "./tool-proxy.js";
 import type { GateLaneTool } from "./schema.js";
 import { newToolId } from "./ids.js";
 
 export class ToolDiscovery {
   private tools: GateLaneTool[] = [];
   private discovered = false;
+  private proxy = new ToolProxy();
 
   async discover(): Promise<GateLaneTool[]> {
     const servers = loadServers();
     this.tools = [];
 
     for (const server of servers.filter((s) => s.enabled)) {
-      let toolList: { name: string; description?: string }[] = [];
+      try {
+        const toolList = await this.proxy.getToolList(server);
 
-      if (server.type === "mock") {
-        toolList = this.getMockTools(server.name);
-      } else {
-        // For real MCP servers, we would connect and list tools.
-        // v0.1.0 uses mock tools for non-mock servers as a placeholder.
-        toolList = this.getMockTools(server.name);
-      }
-
-      for (const t of toolList) {
-        this.tools.push({
-          id: newToolId(),
-          serverId: server.id,
-          serverName: server.name,
-          name: `${server.name}.${t.name}`,
-          description: t.description,
-          enabled: true,
-        });
+        for (const t of toolList) {
+          this.tools.push({
+            id: newToolId(),
+            serverId: server.id,
+            serverName: server.name,
+            name: `${server.name}.${t.name}`,
+            description: t.description,
+            inputSchema: t.inputSchema,
+            enabled: true,
+          });
+        }
+      } catch {
+        const fallback = this.getMockTools(server.name);
+        for (const t of fallback) {
+          this.tools.push({
+            id: newToolId(),
+            serverId: server.id,
+            serverName: server.name,
+            name: `${server.name}.${t.name}`,
+            description: t.description,
+            enabled: true,
+          });
+        }
       }
     }
 
@@ -45,7 +54,7 @@ export class ToolDiscovery {
     return this.tools.find((t) => t.name === toolName);
   }
 
-  private getMockTools(serverName: string): { name: string; description?: string }[] {
+  private getMockTools(serverName: string): { name: string; description?: string; inputSchema?: Record<string, unknown> }[] {
     switch (serverName) {
       case "memorylane":
         return [

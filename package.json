@@ -9,7 +9,7 @@
     "./*": "./dist/*.js"
   },
   "bin": {
-    "gatelane": "./dist/cli.js"
+    "gatelane": "dist/cli.js"
   },
   "files": [
     "dist",
@@ -35,25 +35,54 @@
   },
   "dependencies": {
     "commander": "^12.0.0",
+    "cross-fetch": "^4.0.0",
     "express": "^4.21.0",
-    "uuid": "^10.0.0",
-    "cross-fetch": "^4.0.0"
+    "uuid": "^10.0.0"
+  },
+  "optionalDependencies": {
+    "sql.js": "^1.11.0"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
     "@types/node": "^22.0.0",
     "@types/uuid": "^10.0.0",
+    "esbuild": "^0.25.0",
+    "postject": "^1.0.0-alpha.6",
     "typescript": "^5.6.0",
     "uvu": "^0.5.6"
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run build",
+    "test": "node scripts/test.mjs",
+    "test:watch": "node --experimental-vm-modules node_modules/.bin/uvu test .test.ts -w",
+    "dev": "tsc --watch",
+    "start": "node dist/cli.js",
+    "demo": "node dist/cli.js demo",
+    "doctor": "node dist/cli.js doctor",
+    "serve": "node dist/cli.js serve",
+    "build:binary": "node scripts/build-binaries.mjs"
   },
   "engines": {
     "node": ">=18.0.0"
   },
-  "keywords": ["mcp", "ai-agents", "gateway", "agent-tools", "api-gateway", "talocode", "sdk", "cli", "typescript", "open-source"],
+  "keywords": [
+    "mcp",
+    "ai-agents",
+    "gateway",
+    "agent-tools",
+    "api-gateway",
+    "talocode",
+    "sdk",
+    "cli",
+    "typescript",
+    "open-source"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/talocode/gatelane.git"
+    "url": "git+https://github.com/talocode/gatelane.git"
   },
   "homepage": "https://github.com/talocode/gatelane",
   "bugs": "https://github.com/talocode/gatelane/issues"

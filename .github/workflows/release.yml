@@ -1,0 +1,127 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install
+      - run: npm run build
+      - run: npm test
+        env:
+          GATELANE_HOME: ${{ runner.temp }}/.gatelane-test
+
+  publish-npm:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: npm install
+      - run: npm run build
+      - run: npm publish --access public --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  build-binaries:
+    needs: test
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            arch: x64
+            target: linux-x64
+            node-version: 24
+          - os: ubuntu-latest
+            arch: arm64
+            target: linux-arm64
+            node-version: 24
+          - os: macos-latest
+            arch: x64
+            target: macos-x64
+            node-version: 24
+          - os: macos-latest
+            arch: arm64
+            target: macos-arm64
+            node-version: 24
+          - os: windows-latest
+            arch: x64
+            target: win-x64
+            node-version: 24
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - run: npm install
+      - run: npm run build
+      - name: Build standalone binary (Node SEA)
+        shell: bash
+        run: |
+          npx esbuild dist/cli.js --bundle --platform=node --target=node${{ matrix.node-version }} --format=cjs --outfile=dist/bundle.cjs
+          cat > sea-config.json << 'EOF'
+          { "main": "dist/bundle.cjs", "output": "dist/sea.blob" }
+          EOF
+          node --experimental-sea-config sea-config.json
+          NODE_BIN=$(which node)
+          cp "$NODE_BIN" dist/gatelane-${{ matrix.target }}
+          npx postject dist/gatelane-${{ matrix.target }} NODE_SEA_BLOB dist/sea.blob \
+            --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2 --overwrite
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            mv dist/gatelane-${{ matrix.target }} dist/gatelane-${{ matrix.target }}.exe
+          fi
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gatelane-${{ matrix.target }}
+          path: dist/gatelane-${{ matrix.target }}*
+
+  create-release:
+    needs: [publish-npm, build-binaries]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install
+      - run: npm run build
+      - name: Download all binary artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: gatelane-*
+          merge-multiple: true
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "GateLane ${{ github.ref_name }}" \
+            --notes "$(cat CHANGELOG.md | head -50)" \
+            dist/gatelane-* \
+            talocode-gatelane-${{ github.ref_name }}.tgz \
+            install.sh \
+            install.ps1
+      - name: Generate and upload demo video
+        run: |
+          pip3 install Pillow -q
+          python3 scripts/generate-video.py
+          gh release upload "${{ github.ref_name }}" gatelane-demo.mp4 --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -2,6 +2,7 @@ import express from "express";
 import type { Express, Request, Response, NextFunction } from "express";
 import { ServerRegistry } from "./core/server-registry.js";
 import { ToolDiscovery } from "./core/tool-discovery.js";
+import { ToolProxy } from "./core/tool-proxy.js";
 import { PolicyEngine } from "./core/policy-engine.js";
 import { RateLimiter } from "./core/rate-limiter.js";
 import { AuditLog } from "./core/audit-log.js";
@@ -188,10 +189,8 @@ export function createServer(options: ServerOptions = {}): Express {
       const audit = new AuditLog();
       const usage = new UsageTracker();
 
-      // Mock execution
-      const result = { mock: true, input: body.input, server: toolDef.serverName, tool: body.tool };
-
-      const durationMs = Date.now() - startTime;
+      const proxy = new ToolProxy();
+      const { result, durationMs } = await proxy.call(toolDef, body.input || {});
       const auditEntry = audit.record({
         actor: body.actor || "api",
         serverId: toolDef.serverId,
