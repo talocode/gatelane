@@ -26,9 +26,9 @@ function getVersion(): string {
     const pkg = JSON.parse(
       readFileSync(join(_dirname, "..", "..", "package.json"), "utf-8"),
     );
-    return pkg.version || "0.2.0";
+    return pkg.version || "0.3.0";
   } catch {
-    return "0.2.0";
+    return "0.3.0";
   }
 }
 

@@ -1,6 +1,6 @@
 {
   "name": "@talocode/gatelane",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Open-source MCP gateway and agent tool control plane — auth, policies, rate limits, audit logs, discovery, and routing for AI agents.",
   "type": "module",
   "main": "./dist/index.js",
@@ -23,6 +23,7 @@
     "dist/mcp-server.js",
     "dist/mcp-server.d.ts",
     "dist/sea-entry.cjs",
+    "dist/dashboard",
     "dist/core",
     "dist/commands",
     "skills",

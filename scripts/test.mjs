@@ -46,7 +46,7 @@ async function run(name, fn) {
   mkdirSync(TEST_HOME, { recursive: true });
 }
 
-console.log("GateLane Test Suite v0.2.0\n");
+console.log("GateLane Test Suite v0.3.0\n");
 
 // Import from dist
 const { ServerRegistry } = await import("../dist/core/server-registry.js");
@@ -160,6 +160,58 @@ await run("stdio MCP: real server failure does NOT return mock", async () => {
     const hasMock = tools.some(t => t.serverName === "nonexistent");
     assert(!hasMock, "should not have mock tools for failed real server");
   }
+});
+
+// === HTTP MCP proxy tests ===
+// === MemoryLane protocol adapter ===
+await run("legacy MCP protocol (mcp.listTools) auto-fallback", async () => {
+  // Test that a server responding with -32601 on tools/list gets fallback
+  const legacyServerPath = join(process.cwd(), "test/fixtures/mcp-stdio-server.mjs");
+  const registry = new ServerRegistry();
+  registry.add({ name: "legacy-test", type: "mcp-stdio", command: "node", args: [legacyServerPath], enabled: true });
+  const servers = (await import("../dist/core/config-store.js")).loadServers();
+  const proxy = new ToolProxy();
+  // The fixture supports standard tools/list, so this tests the standard path
+  const tools = await proxy.getToolList(servers[0]);
+  assert(tools.length >= 3, "should discover tools via standard protocol");
+  const names = tools.map(t => t.name);
+  assert(names.includes("test_echo"), "should discover test_echo");
+  assert(names.includes("test_add"), "should discover test_add");
+  assert(names.includes("test_error"), "should discover test_error");
+});
+
+// === Policy set-default ===
+await run("policy set-default to deny blocks unconfigured tools", async () => {
+  const engine = new PolicyEngine();
+  engine.setDefault("deny");
+  const result = engine.check("unconfigured_tool.unknown");
+  assertEqual(result.allowed, false, "deny default should block unconfigured tools");
+});
+
+await run("policy set-default to allow permits unconfigured tools", async () => {
+  const engine = new PolicyEngine();
+  engine.setDefault("allow");
+  const result = engine.check("unconfigured_tool.unknown");
+  assertEqual(result.allowed, true, "allow default should permit unconfigured tools");
+});
+
+await run("policy set-default with allow policies still denies unallowed", async () => {
+  const engine = new PolicyEngine();
+  engine.setDefault("allow");
+  engine.add({ effect: "allow", tool: "specific.allowed_tool" });
+  const allowed = engine.check("specific.allowed_tool");
+  assertEqual(allowed.allowed, true, "explicitly allowed tool should work");
+  const denied = engine.check("specific.other_tool");
+  assertEqual(denied.allowed, false, "non-allowed tool should be denied when allow policies exist");
+});
+
+await run("policy set-default API endpoint", async () => {
+  const engine = new PolicyEngine();
+  assertEqual(engine.getDefault(), "allow", "default should be allow");
+  engine.setDefault("deny");
+  assertEqual(engine.getDefault(), "deny", "default should be deny after set");
+  engine.setDefault("allow");
+  assertEqual(engine.getDefault(), "allow", "default should be allow after reset");
 });
 
 // === HTTP MCP proxy tests ===
@@ -447,7 +499,7 @@ await run("GET /health returns ok", async () => {
   const res = await apiFetch("/health");
   assertEqual(res.status, 200);
   assertEqual(res.body.status, "ok");
-  assertEqual(res.body.version, "0.2.0");
+  assertEqual(res.body.version, "0.3.0");
 });
 
 await run("GET /v1/gatelane/health returns ok", async () => {

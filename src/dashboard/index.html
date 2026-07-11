@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GateLane Dashboard</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0d1117; color: #c9d1d9; }
+header { background: #161b22; border-bottom: 1px solid #30363d; padding: 16px 24px; display: flex; align-items: center; gap: 12px; }
+header h1 { font-size: 20px; font-weight: 600; color: #f0f6fc; }
+header .version { color: #8b949e; font-size: 13px; }
+header .status { margin-left: auto; display: flex; align-items: center; gap: 6px; font-size: 13px; }
+header .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #3fb950; display: inline-block; }
+.container { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; max-width: 1400px; margin: 0 auto; }
+.card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; overflow: hidden; }
+.card-header { padding: 12px 16px; border-bottom: 1px solid #30363d; font-weight: 600; font-size: 14px; color: #f0f6fc; display: flex; justify-content: space-between; align-items: center; }
+.card-body { padding: 0; }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; padding: 8px 16px; font-size: 12px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #21262d; }
+td { padding: 8px 16px; font-size: 13px; border-bottom: 1px solid #21262d; }
+tr:hover td { background: #1c2128; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.badge-allow { background: #1b3a2d; color: #3fb950; }
+.badge-deny { background: #3d1f1f; color: #f85149; }
+.badge-completed { background: #1b3a2d; color: #3fb950; }
+.badge-failed { background: #3d1f1f; color: #f85149; }
+.badge-denied { background: #3d1f1f; color: #f85149; }
+.badge-default { background: #1c2128; color: #8b949e; }
+.mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
+.empty { padding: 24px; text-align: center; color: #8b949e; font-size: 13px; }
+#events { max-height: 300px; overflow-y: auto; }
+.event-item { padding: 6px 16px; font-size: 12px; border-bottom: 1px solid #21262d; display: flex; gap: 8px; }
+.event-time { color: #8b949e; font-family: monospace; white-space: nowrap; }
+.event-msg { flex: 1; }
+.event-tool { font-weight: 600; color: #58a6ff; }
+.event-status { font-weight: 600; }
+@media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>GateLane Dashboard</h1>
+  <span class="version" id="version"></span>
+  <div class="status"><span class="status-dot" id="statusDot"></span><span id="statusText">Connecting...</span></div>
+</header>
+<div class="container">
+  <div class="card"><div class="card-header">Servers <span id="serverCount">0</span></div><div class="card-body"><table><thead><tr><th>Name</th><th>Type</th><th>Target</th><th>Status</th></tr></thead><tbody id="serverTable"><tr><td colspan="4" class="empty">Loading...</td></tr></tbody></table></div></div>
+  <div class="card"><div class="card-header">Tools <span id="toolCount">0</span></div><div class="card-body"><table><thead><tr><th>Name</th><th>Server</th></tr></thead><tbody id="toolTable"><tr><td colspan="2" class="empty">Loading...</td></tr></tbody></table></div></div>
+  <div class="card"><div class="card-header">Policies <span id="policyCount">0</span> <span id="policyDefault" class="badge badge-default"></span></div><div class="card-body"><table><thead><tr><th>Effect</th><th>Target</th></tr></thead><tbody id="policyTable"><tr><td colspan="2" class="empty">Loading...</td></tr></tbody></table></div></div>
+  <div class="card"><div class="card-header">Audit Log <span id="auditCount">0</span></div><div class="card-body"><table><thead><tr><th>Status</th><th>Tool</th><th>Duration</th></tr></thead><tbody id="auditTable"><tr><td colspan="3" class="empty">Loading...</td></tr></tbody></table></div></div>
+  <div class="card" style="grid-column: span 2;"><div class="card-header">Live Events <span id="eventCount">0</span></div><div class="card-body" id="events"><div class="empty">Waiting for events...</div></div></div>
+</div>
+<script>
+const BASE = '';
+async function fetchJSON(path) { const r = await fetch(BASE + path); return r.json(); }
+function badge(status) { const cls = status === 'allow' || status === 'completed' ? 'allow' : status === 'deny' || status === 'denied' ? 'deny' : status === 'failed' ? 'failed' : 'default'; return `<span class="badge badge-${cls}">${status}</span>`; }
+async function loadServers() {
+  try { const d = await fetchJSON('/v1/gatelane/servers'); const t = d.servers || []; document.getElementById('serverCount').textContent = t.length;
+    document.getElementById('serverTable').innerHTML = t.length ? t.map(s => `<tr><td>${s.name}</td><td>${s.type}</td><td class="mono">${s.command || s.url || '-'}</td><td>${s.enabled ? badge('completed') : badge('denied')}</td></tr>`).join('') : '<tr><td colspan="4" class="empty">No servers registered</td></tr>';
+  } catch(e){ document.getElementById('serverTable').innerHTML = '<tr><td colspan="4" class="empty">Error loading servers</td></tr>'; }
+}
+async function loadTools() {
+  try { const d = await fetchJSON('/v1/gatelane/tools'); const t = d.tools || []; document.getElementById('toolCount').textContent = t.length;
+    document.getElementById('toolTable').innerHTML = t.length ? t.map(s => `<tr><td class="mono">${s.name}</td><td>${s.serverName}</td></tr>`).join('') : '<tr><td colspan="2" class="empty">No tools discovered</td></tr>';
+  } catch(e){ document.getElementById('toolTable').innerHTML = '<tr><td colspan="2" class="empty">Error loading tools</td></tr>'; }
+}
+async function loadPolicies() {
+  try { const d = await fetchJSON('/v1/gatelane/policies'); const t = d.policies || [];
+    document.getElementById('policyCount').textContent = t.length;
+    document.getElementById('policyTable').innerHTML = t.length ? t.map(s => `<tr><td>${badge(s.effect)}</td><td class="mono">${s.tool || s.server || 'all'}</td></tr>`).join('') : '<tr><td colspan="2" class="empty">No policies defined</td></tr>';
+    const def = await fetchJSON('/v1/gatelane/policies/default');
+    document.getElementById('policyDefault').textContent = 'Default: ' + def.default.toUpperCase();
+  } catch(e){}
+}
+async function loadAudit() {
+  try { const d = await fetchJSON('/v1/gatelane/audit'); const t = d.entries || []; document.getElementById('auditCount').textContent = t.length;
+    document.getElementById('auditTable').innerHTML = t.length ? t.slice(0, 20).map(s => `<tr><td>${badge(s.status)}</td><td class="mono">${s.toolName || '-'}</td><td>${s.durationMs || ''}${s.durationMs ? 'ms' : ''}</td></tr>`).join('') : '<tr><td colspan="3" class="empty">No audit entries</td></tr>';
+  } catch(e){}
+}
+async function loadHealth() {
+  try { const d = await fetchJSON('/v1/gatelane/health'); document.getElementById('version').textContent = 'v' + d.version;
+    document.getElementById('statusText').textContent = d.cloudMode ? 'Cloud' : 'Local';
+    document.getElementById('statusDot').style.background = '#3fb950';
+  } catch(e){ document.getElementById('statusText').textContent = 'Offline'; document.getElementById('statusDot').style.background = '#f85149'; }
+}
+function connectSSE() {
+  const evtSource = new EventSource('/v1/gatelane/events');
+  const eventsDiv = document.getElementById('events');
+  let count = 0;
+  evtSource.addEventListener('connected', () => { eventsDiv.innerHTML = ''; });
+  evtSource.addEventListener('tool_call_started', (e) => { addEvent(e, 'started'); });
+  evtSource.addEventListener('tool_call_completed', (e) => { addEvent(e, 'completed'); });
+  evtSource.addEventListener('tool_call_errored', (e) => { addEvent(e, 'errored'); });
+  function addEvent(e, type) {
+    try { const d = JSON.parse(e.data); const el = document.createElement('div'); el.className = 'event-item';
+      el.innerHTML = `<span class="event-time">${new Date().toLocaleTimeString()}</span><span class="event-msg"><span class="event-tool">${d.tool || '?'}</span> ${type}</span><span class="event-status badge badge-${type === 'completed' ? 'completed' : 'failed'}">${type}</span>`;
+      eventsDiv.prepend(el); count++; document.getElementById('eventCount').textContent = count;
+      if (eventsDiv.children.length > 100) eventsDiv.removeChild(eventsDiv.lastChild);
+    } catch(e2) {}
+  }
+  evtSource.onerror = () => { setTimeout(connectSSE, 3000); };
+}
+loadHealth(); loadServers(); loadTools(); loadPolicies(); loadAudit();
+setInterval(loadHealth, 10000); setInterval(loadServers, 5000); setInterval(loadTools, 5000); setInterval(loadPolicies, 5000); setInterval(loadAudit, 5000);
+connectSSE();
+</script>
+</body>
+</html>

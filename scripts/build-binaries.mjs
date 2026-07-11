@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { execSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, writeFileSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -67,7 +67,7 @@ async function buildBinary() {
   }
 
   log(`Binary built: ${binaryPath}`);
-  log(`Size: ${(existsSync(binaryPath) ? require("fs").statSync(binaryPath).size / 1024 / 1024 : 0).toFixed(1)}MB`);
+  log(`Size: ${(existsSync(binaryPath) ? statSync(binaryPath).size / 1024 / 1024 : 0).toFixed(1)}MB`);
 }
 
 buildBinary().catch((err) => {

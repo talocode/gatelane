@@ -116,7 +116,7 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
     switch (name) {
       case "gatelane_health": {
         return {
-          content: [{ type: "text", text: JSON.stringify({ status: "ok", service: "gatelane", version: "0.2.0", cloudMode: isCloudMode() }) }],
+          content: [{ type: "text", text: JSON.stringify({ status: "ok", service: "gatelane", version: "0.3.0", cloudMode: isCloudMode() }) }],
         };
       }
       case "gatelane_list_servers": {
@@ -242,7 +242,7 @@ export function createMcp(port: number = 3052): void {
         },
       });
     } else if (method === "health") {
-      res.json({ status: "ok", service: "gatelane-mcp", version: "0.2.0" });
+      res.json({ status: "ok", service: "gatelane-mcp", version: "0.3.0" });
     } else {
       res.json({
         jsonrpc: "2.0",
@@ -254,7 +254,7 @@ export function createMcp(port: number = 3052): void {
 
   // Health endpoint
   app.get("/health", (_req, res) => {
-    res.json({ status: "ok", service: "gatelane-mcp", version: "0.2.0" });
+    res.json({ status: "ok", service: "gatelane-mcp", version: "0.3.0" });
   });
 
   app.listen(port, () => {

@@ -10,7 +10,22 @@ import { UsageTracker } from "./core/usage.js";
 import { checkAuth, isCloudMode } from "./core/auth.js";
 import { newRequestId } from "./core/ids.js";
 import { GateLaneError, ToolDeniedError, RateLimitExceededError, AuthError, ValidationError } from "./core/errors.js";
-import type { ToolCallRequest, ToolCallResponse, CreateServerRequest, CreatePolicyRequest, GateLaneRateLimit } from "./core/schema.js";
+import type { ToolCallRequest, ToolCallResponse, CreateServerRequest, CreatePolicyRequest, GateLaneRateLimit, GateLaneAuditEvent } from "./core/schema.js";
+import { join, dirname } from "node:path";
+import { existsSync } from "node:fs";
+
+const _dashboardDir = (() => {
+  try { return join(dirname(new URL(import.meta.url).pathname), "dashboard"); } catch { return join(process.cwd(), "dist", "dashboard"); }
+})();
+
+const sseClients = new Set<Response>();
+
+export function broadcastEvent(event: string, data: unknown): void {
+  const msg = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  for (const client of sseClients) {
+    try { client.write(msg); } catch { sseClients.delete(client); }
+  }
+}
 
 export interface ServerOptions {
   port?: number;
@@ -32,6 +47,14 @@ export function createServer(options: ServerOptions = {}): Express {
     }
     next();
   });
+
+  // Dashboard static files
+  if (existsSync(_dashboardDir)) {
+    app.use("/dashboard", express.static(_dashboardDir));
+    app.get("/", (_req: Request, res: Response) => {
+      res.sendFile(join(_dashboardDir, "index.html"));
+    });
+  }
 
   // Auth middleware for cloud mode
   function authMiddleware(req: Request, _res: Response, next: NextFunction): void {
@@ -59,11 +82,11 @@ export function createServer(options: ServerOptions = {}): Express {
 
   // === Health & Info ===
   app.get("/health", (_req: Request, res: Response) => {
-    res.json({ status: "ok", service: "gatelane", version: "0.2.0", cloudMode: isCloudMode() });
+    res.json({ status: "ok", service: "gatelane", version: "0.3.0", cloudMode: isCloudMode() });
   });
 
   app.get("/v1/gatelane/health", (_req: Request, res: Response) => {
-    res.json({ status: "ok", service: "gatelane", version: "0.2.0", cloudMode: isCloudMode() });
+    res.json({ status: "ok", service: "gatelane", version: "0.3.0", cloudMode: isCloudMode() });
   });
 
   app.get("/v1/gatelane/capabilities", (_req: Request, res: Response) => {
@@ -77,8 +100,10 @@ export function createServer(options: ServerOptions = {}): Express {
         "audit-logs",
         "usage-tracking",
         "cloud-auth",
+        "sse-events",
+        "dashboard",
       ],
-      version: "0.2.0",
+      version: "0.3.0",
     });
   });
 
@@ -189,6 +214,8 @@ export function createServer(options: ServerOptions = {}): Express {
       const audit = new AuditLog();
       const usage = new UsageTracker();
 
+      broadcastEvent("tool_call_started", { tool: body.tool, actor: body.actor || "api", requestId });
+
       const proxy = new ToolProxy();
       const { result, durationMs } = await proxy.call(toolDef, body.input || {});
       const auditEntry = audit.record({
@@ -208,6 +235,8 @@ export function createServer(options: ServerOptions = {}): Express {
         requestId,
         credits: 1,
       });
+
+      broadcastEvent("tool_call_completed", { tool: body.tool, requestId, status: "completed", durationMs, auditId: auditEntry.id });
 
       const response: ToolCallResponse = {
         requestId,
@@ -248,6 +277,8 @@ export function createServer(options: ServerOptions = {}): Express {
         durationMs,
       });
 
+      broadcastEvent("tool_call_errored", { tool: body?.tool, requestId, status, error: message, durationMs });
+
       res.status(statusCode).json({
         requestId,
         status,
@@ -276,6 +307,22 @@ export function createServer(options: ServerOptions = {}): Express {
     const engine = new PolicyEngine();
     engine.remove(req.params.id);
     res.json({ status: "removed" });
+  });
+
+  app.get("/v1/gatelane/policies/default", (_req: Request, res: Response) => {
+    const engine = new PolicyEngine();
+    res.json({ default: engine.getDefault() });
+  });
+
+  app.put("/v1/gatelane/policies/default", authMiddleware, (req: Request, res: Response) => {
+    const { effect } = req.body as { effect: string };
+    if (effect !== "allow" && effect !== "deny") {
+      res.status(400).json({ error: "effect must be 'allow' or 'deny'" });
+      return;
+    }
+    const engine = new PolicyEngine();
+    engine.setDefault(effect);
+    res.json({ default: effect });
   });
 
   // === Rate Limits ===
@@ -308,6 +355,19 @@ export function createServer(options: ServerOptions = {}): Express {
     const audit = new AuditLog();
     const n = parseInt(req.query.n as string) || 10;
     res.json({ entries: audit.tail(n) });
+  });
+
+  // === SSE Events ===
+  app.get("/v1/gatelane/events", (req: Request, res: Response) => {
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "Access-Control-Allow-Origin": "*",
+    });
+    res.write(`event: connected\ndata: {"status":"ok"}\n\n`);
+    sseClients.add(res);
+    req.on("close", () => { sseClients.delete(res); });
   });
 
   // === Usage ===

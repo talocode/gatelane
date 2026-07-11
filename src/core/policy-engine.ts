@@ -1,4 +1,4 @@
-import { loadPolicies, savePolicies } from "./config-store.js";
+import { loadPolicies, savePolicies, loadConfig, saveConfig } from "./config-store.js";
 import type { GateLanePolicy, CreatePolicyRequest } from "./schema.js";
 import { newPolicyId } from "./ids.js";
 import { ToolDeniedError } from "./errors.js";
@@ -38,45 +38,48 @@ export class PolicyEngine {
     }
   }
 
+  getDefault(): "allow" | "deny" {
+    const config = loadConfig();
+    return config.policyDefault || "allow";
+  }
+
+  setDefault(effect: "allow" | "deny"): void {
+    const config = loadConfig();
+    config.policyDefault = effect;
+    saveConfig(config);
+  }
+
   check(tool: string, actor?: string): { allowed: boolean; reason?: string } {
     const toolParts = tool.split(".");
     const serverName = toolParts[0];
     const toolName = toolParts.slice(1).join(".");
 
-    // Deny policies are checked first (most specific wins)
     const denyPolicies = this.policies.filter(
-      (p) =>
-        p.effect === "deny" &&
-        this.matches(p, serverName, toolName, actor),
+      (p) => p.effect === "deny" && this.matches(p, serverName, toolName, actor),
     );
-
     if (denyPolicies.length > 0) {
       return { allowed: false, reason: denyPolicies[0].reason };
     }
 
-    // If there are any allow policies, at least one must match
     const allowPolicies = this.policies.filter((p) => p.effect === "allow");
     if (allowPolicies.length > 0) {
-      const matched = allowPolicies.some((p) =>
-        this.matches(p, serverName, toolName, actor),
-      );
+      const matched = allowPolicies.some((p) => this.matches(p, serverName, toolName, actor));
       if (!matched) {
         return { allowed: false, reason: "No matching allow policy" };
       }
     }
 
+    const defaultEffect = this.getDefault();
+    if (defaultEffect === "deny" && allowPolicies.length === 0) {
+      return { allowed: false, reason: "Default policy is deny; no allow policy matches" };
+    }
+
     return { allowed: true };
   }
 
-  private matches(
-    policy: GateLanePolicy,
-    serverName: string,
-    toolName: string,
-    actor?: string,
-  ): boolean {
+  private matches(policy: GateLanePolicy, serverName: string, toolName: string, actor?: string): boolean {
     if (policy.server && policy.server !== serverName) return false;
     if (policy.tool) {
-      // policy.tool can be "server.tool" or just "tool"
       const policyParts = policy.tool.split(".");
       if (policyParts.length === 2) {
         if (policyParts[0] !== serverName || policyParts[1] !== toolName) return false;

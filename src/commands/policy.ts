@@ -46,7 +46,7 @@ policyCommand
     const policies = engine.list();
     if (policies.length === 0) {
       console.log(" No policies defined.");
-      console.log(" Run: gatelane policy allow <server.tool>");
+      console.log(` Default: ${engine.getDefault().toUpperCase()} (use 'policy set-default <allow|deny>' to change)`);
       return;
     }
     for (const p of policies) {
@@ -54,6 +54,21 @@ policyCommand
       console.log(` ${p.effect.toUpperCase()} ${target}`);
       console.log(`   ID: ${p.id}${p.reason ? ` | Reason: ${p.reason}` : ""}`);
     }
+    console.log(` Default: ${engine.getDefault().toUpperCase()}`);
+  });
+
+policyCommand
+  .command("set-default <effect>")
+  .description("Set default policy (allow or deny) for unconfigured tools")
+  .action((effect) => {
+    if (effect !== "allow" && effect !== "deny") {
+      console.error(" Error: effect must be 'allow' or 'deny'");
+      return;
+    }
+    const engine = new PolicyEngine();
+    engine.setDefault(effect);
+    console.log(` Default policy set to: ${effect.toUpperCase()}`);
+    console.log(" Tools without matching policies will now be", effect === "deny" ? "DENIED" : "ALLOWED");
   });
 
 policyCommand

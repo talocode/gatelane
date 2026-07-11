@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.3.0 (2026-07-11)
+
+GateLane v0.3.0 adds MemoryLane MCP protocol compatibility, production-ready policy defaults, real-time SSE events, and a web dashboard.
+
+### Added
+
+- MemoryLane MCP protocol adapter — auto-fallback from `tools/list` to `mcp.listTools` and from `tools/call` to `mcp.callTool`
+- `gatelane policy set-default <allow|deny>` command for production mode
+- `GET/PUT /v1/gatelane/policies/default` API endpoint for policy default
+- HTTP Server-Sent Events (SSE) transport via `GET /v1/gatelane/events`
+- Web dashboard UI at `/` with live event stream, servers, tools, policies, audit log
+- Broadcast events: `tool_call_started`, `tool_call_completed`, `tool_call_errored`
+- `"sse-events"` and `"dashboard"` capability announcements
+
+### Changed
+
+- Version bumped from 0.2.0 to 0.3.0
+- Policy engine respects `policyDefault` config (`allow` or `deny`) when no policies match
+- ToolProxy tries standard MCP methods first, then legacy MemoryLane methods on `-32601`
+- `build-binaries.mjs` now uses `statSync` import instead of `require("fs")` in ESM context
+
+### Fixed
+
+- Binary build script no longer crashes with `require is not defined` in ESM context
+
 ## v0.2.0 (2026-07-11)
 
 GateLane v0.2.0 upgrades from a gateway foundation to a real MCP gateway and agent tool control plane with real MCP stdio/HTTP proxying, real tool discovery, optional SQLite storage, and CI/CD release automation.

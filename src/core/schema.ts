@@ -71,6 +71,7 @@ export interface GateLaneUsageEvent {
 export interface GateLaneConfig {
   cloudMode: boolean;
   defaultPort: number;
+  policyDefault?: "allow" | "deny";
   createdAt: string;
   updatedAt: string;
 }
