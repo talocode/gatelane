@@ -1,11 +1,12 @@
 import { Command } from "commander";
 import { ToolDiscovery } from "../core/tool-discovery.js";
+import { ToolProxy } from "../core/tool-proxy.js";
 import { PolicyEngine } from "../core/policy-engine.js";
 import { RateLimiter } from "../core/rate-limiter.js";
 import { AuditLog } from "../core/audit-log.js";
 import { UsageTracker } from "../core/usage.js";
 import { newRequestId } from "../core/ids.js";
-import { ToolDeniedError, RateLimitExceededError } from "../core/errors.js";
+import { ToolDeniedError, RateLimitExceededError, GateLaneError } from "../core/errors.js";
 
 export const callCommand = new Command("call")
   .description("Call a tool through GateLane")
@@ -20,6 +21,7 @@ export const callCommand = new Command("call")
     const rateLimiter = new RateLimiter();
     const audit = new AuditLog();
     const usage = new UsageTracker();
+    const proxy = new ToolProxy();
 
     let tools = discovery.list();
     if (tools.length === 0) {
@@ -42,14 +44,14 @@ export const callCommand = new Command("call")
     }
 
     try {
-      rateLimiter.check(toolDef.serverName, tool, options.actor);
-
       const { allowed, reason } = policy.check(tool, options.actor);
       if (!allowed) {
         throw new ToolDeniedError(tool, reason);
       }
 
-      const durationMs = Date.now() - startTime;
+      rateLimiter.check(toolDef.serverName, tool, options.actor);
+
+      const { result, durationMs } = await proxy.call(toolDef, input);
 
       audit.record({
         actor: options.actor || "cli",
@@ -71,25 +73,29 @@ export const callCommand = new Command("call")
 
       console.log(` Tool call: ${tool}`);
       console.log(`   Request ID: ${requestId}`);
-      console.log(`   Status: completed ✓`);
+      console.log(`   Status: completed`);
       console.log(`   Duration: ${durationMs}ms`);
       console.log(`   Input: ${JSON.stringify(input)}`);
-      console.log(`   Result: (mock) echo of input`);
-      console.log(`   Note: This is a mock call. Connect real MCP servers for actual execution.`);
+      console.log(`   Result: ${JSON.stringify(result)}`);
     } catch (err: unknown) {
       const e = err as Error;
       const durationMs = Date.now() - startTime;
+      const isDenied = e instanceof ToolDeniedError;
+      const isRateLimit = e instanceof RateLimitExceededError;
+      const status = isDenied ? "denied" : "failed";
+
       audit.record({
         actor: options.actor || "cli",
         toolName: tool,
         requestId,
-        status: e instanceof ToolDeniedError ? "denied" : "failed",
+        status,
         reason: e.message,
         durationMs,
       });
-      console.error(` Tool call failed: ${tool}`);
+
+      console.error(` Tool call ${status}: ${tool}`);
       console.error(`   Request ID: ${requestId}`);
-      console.error(`   Status: ${e instanceof ToolDeniedError ? "denied" : "failed"}`);
-      console.error(`   Error: ${e.message}`);
+      console.error(`   Status: ${status}`);
+      console.error(`   Reason: ${e.message}`);
     }
   });

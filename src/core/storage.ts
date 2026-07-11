@@ -28,13 +28,30 @@ export interface StorageBackend {
 
 let _backend: StorageBackend | null = null;
 
+function getDriver(): string {
+  return process.env.GATELANE_STORAGE_DRIVER || "json";
+}
+
 export function setStorageBackend(backend: StorageBackend): void {
   _backend = backend;
 }
 
 export function getStorageBackend(): StorageBackend {
   if (!_backend) {
-    _backend = new (_require("./storage-json.js").JsonStorageBackend)() as StorageBackend;
+    const driver = getDriver();
+    if (driver === "sqlite") {
+      try {
+        const { SqliteStorageBackend } = _require("./storage-sqlite.js");
+        _backend = new SqliteStorageBackend() as StorageBackend;
+      } catch (err) {
+        console.warn("SQLite backend requested but unavailable, falling back to JSON:", (err as Error).message);
+        const { JsonStorageBackend } = _require("./storage-json.js");
+        _backend = new JsonStorageBackend() as StorageBackend;
+      }
+    } else {
+      const { JsonStorageBackend } = _require("./storage-json.js");
+      _backend = new JsonStorageBackend() as StorageBackend;
+    }
   }
   return _backend;
 }

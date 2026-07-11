@@ -7,17 +7,18 @@ GateLane controls how AI agents access tools. It sits between agents and MCP ser
 ## Features
 
 - **MCP Server Registry** — register and manage MCP servers (stdio, HTTP, mock)
-- **Tool Discovery** — automatically discover tools from registered servers
-- **Controlled Tool Calls** — proxy tool calls through auth, policy, and rate limit checks
+- **Real MCP Tool Discovery** — discover real tools from stdio and HTTP MCP servers
+- **Real MCP Tool Proxying** — proxy tool calls to real MCP servers via stdio JSON-RPC 2.0 or HTTP POST
 - **Allow/Deny Policies** — per-tool, per-server, per-actor access control
 - **Rate Limiting** — global, per-server, per-tool, and per-actor rate limits
 - **Audit Logs** — every tool call recorded with status, duration, and actor
 - **Usage Tracking** — credit-based usage tracking foundation
-- **Local HTTP API** — REST API for programmatic access
+- **Local HTTP API** — REST API with 22+ endpoints
 - **TypeScript SDK** — typed client library
 - **MCP Server** — GateLane exposes its own MCP server with 11 management tools
-- **CLI** — full command-line interface
+- **CLI** — full command-line interface with 15 commands
 - **Cloud Auth** — local mode is keyless; Talocode Cloud mode gated by TALOCODE_API_KEY
+- **Optional SQLite Backend** — persistent storage via sql.js (falls back to JSON)
 
 ## Install
 
@@ -53,6 +54,28 @@ gatelane call memorylane.memorylane_recall --input '{"query":"Hello world"}'
 gatelane logs list
 ```
 
+### Real MCP proxy example (with MemoryLane)
+
+```bash
+# Install MemoryLane
+npm install -g @talocode/memorylane
+
+# Register as a stdio MCP server
+gatelane servers add memorylane --type mcp-stdio --command "memorylane mcp"
+
+# Discover real MemoryLane tools
+gatelane tools discover
+
+# Allow the recall tool
+gatelane policy allow memorylane.memorylane_recall
+
+# Call the real MCP tool through GateLane
+gatelane call memorylane.memorylane_recall --input '{"query":"How should I write launch posts?"}'
+
+# View the audit log
+gatelane logs list
+```
+
 ## Overview
 
 ```
@@ -75,7 +98,7 @@ gatelane init                # Initialize config
 gatelane doctor              # Check installation
 gatelane demo                # Run interactive demo
 
-gatelane servers add <name> --type mock
+gatelane servers add <name> --type mcp-stdio --command "<cmd>"
 gatelane servers list
 gatelane servers show <name>
 gatelane servers remove <name>
@@ -142,7 +165,7 @@ import { GateLaneClient } from "@talocode/gatelane";
 const gate = new GateLaneClient({ baseUrl: "http://localhost:3050" });
 
 // Register a server
-await gate.addServer({ name: "memorylane", type: "mock" });
+await gate.addServer({ name: "memorylane", type: "mcp-stdio", command: "memorylane", args: ["mcp"] });
 
 // Discover tools
 await gate.discoverTools();
@@ -194,6 +217,18 @@ Protected endpoints require either:
 - `Authorization: Bearer <key>` header
 - `X-Api-Key: <key>` header
 
+## Storage Backend
+
+Default storage is JSON files in `~/.gatelane/`. SQLite is optional:
+
+```bash
+# Use JSON (default)
+export GATELANE_STORAGE_DRIVER=json
+
+# Use SQLite (requires npm install sql.js)
+export GATELANE_STORAGE_DRIVER=sqlite
+```
+
 ## Installation
 
 | Platform | Command |
@@ -208,6 +243,7 @@ See [docs/INSTALL.md](docs/INSTALL.md) for full instructions.
 ## Examples
 
 See [examples/](examples/) for:
+- Real MemoryLane MCP proxy
 - Basic MCP gateway setup
 - SearchLane + MemoryLane gateway
 - Local command tool (experimental)
@@ -226,6 +262,14 @@ See [examples/](examples/) for:
 - [Audit Logs](docs/AUDIT_LOGS.md)
 - [Examples](docs/EXAMPLES.md)
 - [Release Notes](docs/RELEASE.md)
+
+## Policy Behavior
+
+GateLane v0.2.0 policy behavior:
+- **Local mode**: allow unless a deny policy explicitly blocks. Warned: production use should define allow policies.
+- **Cloud mode**: deny by default unless an allow policy exists.
+- Deny policies are checked first (most specific wins).
+- If allow policies exist, at least one must match the tool.
 
 ## License
 

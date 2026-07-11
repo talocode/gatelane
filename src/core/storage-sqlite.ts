@@ -8,52 +8,48 @@ import type { StorageBackend } from "./storage.js";
 
 const HOME_VAR = process.env.GATELANE_HOME || join(homedir(), ".gatelane");
 
-let _initPromise: Promise<void> | null = null;
-
 export class SqliteStorageBackend implements StorageBackend {
   private db: any = null;
   private initialized = false;
 
   constructor() {
-    this._init();
-  }
-
-  private async _init(): Promise<void> {
-    if (_initPromise) return _initPromise;
-    _initPromise = this._initDb();
-    return _initPromise;
-  }
-
-  private async _initDb(): Promise<void> {
     try {
-      const initSqlJs = (await import("sql.js")).default;
-      const fs = await import("node:fs");
-      const dbPath = join(HOME_VAR, "gatelane.db");
-
-      let sqlDb: any;
-      if (existsSync(dbPath)) {
-        const buffer = fs.readFileSync(dbPath);
-        sqlDb = await initSqlJs({ locateFile: () => "" });
-        sqlDb = new sqlDb.Database(buffer);
-      } else {
-        if (!fs.existsSync(HOME_VAR)) {
-          fs.mkdirSync(HOME_VAR, { recursive: true });
+      // Try to require sql.js synchronously — if not installed, this throws
+      const initSqlJs = _require("sql.js");
+      // initSqlJs() returns a Promise (WASM loading), so schedule init
+      initSqlJs({ locateFile: () => "" }).then((SQL: any) => {
+        try {
+          const dbPath = join(HOME_VAR, "gatelane.db");
+          let sqlDb: any;
+          if (existsSync(dbPath)) {
+            const buffer = readFileSync(dbPath);
+            sqlDb = new SQL.Database(buffer);
+          } else {
+            if (!existsSync(HOME_VAR)) {
+              mkdirSync(HOME_VAR, { recursive: true });
+            }
+            sqlDb = new SQL.Database();
+            this._createTables(sqlDb);
+            this._saveDb(sqlDb, dbPath);
+          }
+          this.db = sqlDb;
+          this.initialized = true;
+        } catch (err2) {
+          this._fallbackToJson(err2);
         }
-        sqlDb = await initSqlJs({ locateFile: () => "" });
-        sqlDb = new sqlDb.Database();
-        this._createTables(sqlDb);
-        this._saveDb(sqlDb, dbPath);
-      }
-
-      this.db = sqlDb;
-      this.initialized = true;
+      }).catch((err: Error) => {
+        this._fallbackToJson(err);
+      });
     } catch (err) {
-      console.warn("SQLite backend unavailable, falling back to JSON storage:", (err as Error).message);
-      const { JsonStorageBackend } = await import("./storage-json.js");
-      const jsonBackend = new JsonStorageBackend();
-      this.db = jsonBackend;
-      this.initialized = true;
+      this._fallbackToJson(err);
     }
+  }
+
+  private _fallbackToJson(err: unknown): void {
+    console.warn("SQLite backend unavailable, falling back to JSON storage:", (err as Error).message);
+    const { JsonStorageBackend } = _require("./storage-json.js");
+    this.db = new JsonStorageBackend();
+    this.initialized = true;
   }
 
   private _createTables(db: any): void {
@@ -124,28 +120,24 @@ export class SqliteStorageBackend implements StorageBackend {
     writeFileSync(dbPath, buffer);
   }
 
-  private _ensureInit(): void {
-    if (!this.initialized) {
-      throw new Error("SQLite backend not initialized. Call await backend.init() first.");
-    }
-  }
-
   private _isJsonFallback(): boolean {
     return this.db?.loadConfig !== undefined;
   }
 
-  // Delegate to JSON fallback or use SQLite
   private _getDb() {
-    this._ensureInit();
+    // If not initialized yet and db is null, fall back to JSON synchronously
+    if (!this.initialized) {
+      if (!this.db) {
+        const { JsonStorageBackend } = _require("./storage-json.js");
+        this.db = new JsonStorageBackend();
+      }
+      return this.db;
+    }
     return this.db;
   }
 
-  async init(): Promise<void> {
-    await this._init();
-  }
-
   loadConfig(): GateLaneConfig {
-    this._ensureInit();
+    this._getDb();
     if (this._isJsonFallback()) return (this.db as StorageBackend).loadConfig();
 
     const stmt = this.db.exec("SELECT value FROM config WHERE key = 'config'");
@@ -168,7 +160,7 @@ export class SqliteStorageBackend implements StorageBackend {
   }
 
   saveConfig(config: GateLaneConfig): void {
-    this._ensureInit();
+    this._getDb();
     if (this._isJsonFallback()) return (this.db as StorageBackend).saveConfig(config);
 
     config.updatedAt = new Date().toISOString();
@@ -177,7 +169,7 @@ export class SqliteStorageBackend implements StorageBackend {
   }
 
   loadServers(): GateLaneServer[] {
-    this._ensureInit();
+    this._getDb();
     if (this._isJsonFallback()) return (this.db as StorageBackend).loadServers();
 
     const stmt = this.db.exec("SELECT * FROM servers ORDER BY createdAt DESC");
@@ -185,7 +177,7 @@ export class SqliteStorageBackend implements StorageBackend {
   }
 
   saveServers(servers: GateLaneServer[]): void {
-    this._ensureInit();
+    this._getDb();
     if (this._isJsonFallback()) return (this.db as StorageBackend).saveServers(servers);
 
     this.db.run("DELETE FROM servers");
@@ -205,7 +197,7 @@ export class SqliteStorageBackend implements StorageBackend {
   }
 
   loadPolicies(): GateLanePolicy[] {
-    this._ensureInit();
+    this._getDb();
     if (this._isJsonFallback()) return (this.db as StorageBackend).loadPolicies();
 
     const stmt = this.db.exec("SELECT * FROM policies ORDER BY createdAt DESC");
@@ -213,7 +205,7 @@ export class SqliteStorageBackend implements StorageBackend {
   }
 
   savePolicies(policies: GateLanePolicy[]): void {
-    this._ensureInit();
+    this._getDb();
     if (this._isJsonFallback()) return (this.db as StorageBackend).savePolicies(policies);
 
     this.db.run("DELETE FROM policies");
@@ -227,7 +219,7 @@ export class SqliteStorageBackend implements StorageBackend {
   }
 
   loadRateLimits(): GateLaneRateLimit[] {
-    this._ensureInit();
+    this._getDb();
     if (this._isJsonFallback()) return (this.db as StorageBackend).loadRateLimits();
 
     const stmt = this.db.exec("SELECT * FROM rate_limits ORDER BY createdAt DESC");
@@ -235,7 +227,7 @@ export class SqliteStorageBackend implements StorageBackend {
   }
 
   saveRateLimits(limits: GateLaneRateLimit[]): void {
-    this._ensureInit();
+    this._getDb();
     if (this._isJsonFallback()) return (this.db as StorageBackend).saveRateLimits(limits);
 
     this.db.run("DELETE FROM rate_limits");
@@ -249,7 +241,7 @@ export class SqliteStorageBackend implements StorageBackend {
   }
 
   appendAuditLog(event: GateLaneAuditEvent): void {
-    this._ensureInit();
+    this._getDb();
     if (this._isJsonFallback()) return (this.db as StorageBackend).appendAuditLog(event);
 
     this.db.run(
@@ -265,7 +257,7 @@ export class SqliteStorageBackend implements StorageBackend {
   }
 
   loadAuditLogs(): GateLaneAuditEvent[] {
-    this._ensureInit();
+    this._getDb();
     if (this._isJsonFallback()) return (this.db as StorageBackend).loadAuditLogs();
 
     const stmt = this.db.exec("SELECT * FROM audit_logs ORDER BY createdAt DESC");
@@ -273,7 +265,7 @@ export class SqliteStorageBackend implements StorageBackend {
   }
 
   appendUsageEvent(event: GateLaneUsageEvent): void {
-    this._ensureInit();
+    this._getDb();
     if (this._isJsonFallback()) return (this.db as StorageBackend).appendUsageEvent(event);
 
     this.db.run(
@@ -284,7 +276,7 @@ export class SqliteStorageBackend implements StorageBackend {
   }
 
   loadUsageEvents(): GateLaneUsageEvent[] {
-    this._ensureInit();
+    this._getDb();
     if (this._isJsonFallback()) return (this.db as StorageBackend).loadUsageEvents();
 
     const stmt = this.db.exec("SELECT * FROM usage_events ORDER BY createdAt DESC");

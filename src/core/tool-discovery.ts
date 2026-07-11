@@ -3,6 +3,8 @@ import { ToolProxy } from "./tool-proxy.js";
 import type { GateLaneTool } from "./schema.js";
 import { newToolId } from "./ids.js";
 
+const REAL_TYPES = ["mcp-stdio", "mcp-http", "http-api"];
+
 export class ToolDiscovery {
   private tools: GateLaneTool[] = [];
   private discovered = false;
@@ -27,17 +29,22 @@ export class ToolDiscovery {
             enabled: true,
           });
         }
-      } catch {
-        const fallback = this.getMockTools(server.name);
-        for (const t of fallback) {
-          this.tools.push({
-            id: newToolId(),
-            serverId: server.id,
-            serverName: server.name,
-            name: `${server.name}.${t.name}`,
-            description: t.description,
-            enabled: true,
-          });
+      } catch (err) {
+        if (REAL_TYPES.includes(server.type)) {
+          const message = err instanceof Error ? err.message : String(err);
+          console.error(` Failed to discover tools for '${server.name}': ${message}`);
+        } else {
+          const fallback = this.proxy.getMockTools(server.name);
+          for (const t of fallback) {
+            this.tools.push({
+              id: newToolId(),
+              serverId: server.id,
+              serverName: server.name,
+              name: `${server.name}.${t.name}`,
+              description: t.description,
+              enabled: true,
+            });
+          }
         }
       }
     }
@@ -52,34 +59,5 @@ export class ToolDiscovery {
 
   get(toolName: string): GateLaneTool | undefined {
     return this.tools.find((t) => t.name === toolName);
-  }
-
-  private getMockTools(serverName: string): { name: string; description?: string; inputSchema?: Record<string, unknown> }[] {
-    switch (serverName) {
-      case "memorylane":
-        return [
-          { name: "memorylane_recall", description: "Recall memories by query" },
-          { name: "memorylane_store", description: "Store a new memory" },
-          { name: "memorylane_forget", description: "Delete a memory" },
-          { name: "memorylane_list", description: "List all memories" },
-        ];
-      case "searchlane":
-        return [
-          { name: "searchlane_search", description: "Search the web" },
-          { name: "searchlane_fetch", description: "Fetch a URL" },
-          { name: "searchlane_extract", description: "Extract content from a page" },
-        ];
-      case "geolane":
-        return [
-          { name: "geolane_check", description: "Check AI visibility for a domain" },
-          { name: "geolane_audit", description: "Run full AI citation audit" },
-        ];
-      default:
-        return [
-          { name: `${serverName}_ping`, description: `Ping the ${serverName} server` },
-          { name: `${serverName}_echo`, description: `Echo input back from ${serverName}` },
-          { name: `${serverName}_query`, description: `Query ${serverName} with input` },
-        ];
-    }
   }
 }

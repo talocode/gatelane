@@ -1,6 +1,6 @@
 {
   "name": "@talocode/gatelane",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Open-source MCP gateway and agent tool control plane — auth, policies, rate limits, audit logs, discovery, and routing for AI agents.",
   "type": "module",
   "main": "./dist/index.js",
@@ -12,7 +12,19 @@
     "gatelane": "dist/cli.js"
   },
   "files": [
-    "dist",
+    "dist/index.js",
+    "dist/index.d.ts",
+    "dist/cli.js",
+    "dist/cli.d.ts",
+    "dist/sdk.js",
+    "dist/sdk.d.ts",
+    "dist/server.js",
+    "dist/server.d.ts",
+    "dist/mcp-server.js",
+    "dist/mcp-server.d.ts",
+    "dist/sea-entry.cjs",
+    "dist/core",
+    "dist/commands",
     "skills",
     "docs",
     "installers",
@@ -31,7 +43,8 @@
     "start": "node dist/cli.js",
     "demo": "node dist/cli.js demo",
     "doctor": "node dist/cli.js doctor",
-    "serve": "node dist/cli.js serve"
+    "serve": "node dist/cli.js serve",
+    "build:binary": "node scripts/build-binaries.mjs"
   },
   "dependencies": {
     "commander": "^12.0.0",
@@ -50,19 +63,6 @@
     "postject": "^1.0.0-alpha.6",
     "typescript": "^5.6.0",
     "uvu": "^0.5.6"
-  },
-  "scripts": {
-    "build": "tsc",
-    "clean": "rm -rf dist",
-    "prepublishOnly": "npm run build",
-    "test": "node scripts/test.mjs",
-    "test:watch": "node --experimental-vm-modules node_modules/.bin/uvu test .test.ts -w",
-    "dev": "tsc --watch",
-    "start": "node dist/cli.js",
-    "demo": "node dist/cli.js demo",
-    "doctor": "node dist/cli.js doctor",
-    "serve": "node dist/cli.js serve",
-    "build:binary": "node scripts/build-binaries.mjs"
   },
   "engines": {
     "node": ">=18.0.0"

@@ -4,3 +4,4 @@ dist/
 .gatelane/
 .env
 *.local
+test/.test-gatelane/

@@ -59,11 +59,11 @@ export function createServer(options: ServerOptions = {}): Express {
 
   // === Health & Info ===
   app.get("/health", (_req: Request, res: Response) => {
-    res.json({ status: "ok", service: "gatelane", version: "0.1.0", cloudMode: isCloudMode() });
+    res.json({ status: "ok", service: "gatelane", version: "0.2.0", cloudMode: isCloudMode() });
   });
 
   app.get("/v1/gatelane/health", (_req: Request, res: Response) => {
-    res.json({ status: "ok", service: "gatelane", version: "0.1.0", cloudMode: isCloudMode() });
+    res.json({ status: "ok", service: "gatelane", version: "0.2.0", cloudMode: isCloudMode() });
   });
 
   app.get("/v1/gatelane/capabilities", (_req: Request, res: Response) => {
@@ -78,7 +78,7 @@ export function createServer(options: ServerOptions = {}): Express {
         "usage-tracking",
         "cloud-auth",
       ],
-      version: "0.1.0",
+      version: "0.2.0",
     });
   });
 
